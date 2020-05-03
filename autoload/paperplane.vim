@@ -22,12 +22,12 @@ function! paperplane#_update() abort
 	" let type = get(g:, 'paperplane_type', 'preview')
 
 	call cursor(0, 1)
-	if searchpos('\v\C^\s*\zs\S(.*[^:])?$', 'Wc', 0, timeout)[0] !=# 0
+	if searchpos('\v\C^\s*\zs\w(.*[^:])?$', 'Wc', 0, timeout)[0] !=# 0
 		let indent = virtcol('.')
 		let maylabel = 1
 
 		while 1
-			let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs\S'.(maylabel ? '.*\w' : '.*\w.*[^:]\s*$'), 'Wb', 0, timeout)
+			let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs\w'.(maylabel ? '' : '.*[^:]\s*$'), 'Wb', 0, timeout)
 			if tolnum ==# 0
 				break
 			endif
