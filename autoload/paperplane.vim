@@ -88,11 +88,13 @@ function! paperplane#_update() abort
 		let pwinid = winnr()
 		wincmd p
 
+		" Width of numbers (not including space).
 		if &number || &relativenumber
 			let nw = max([&numberwidth - 1, float2nr(ceil(log10(line('$'))))])
 		else
 			let nw = 0
 		endif
+		" Width of sign column.
 		let sw = wincol() - virtcol('.') - (nw ># 0 ? nw + 1 : 0)
 		if nw ># 0
 			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%*d %%#Normal#', sw, '', nw, w0 - (iter[0] + 1)))
@@ -105,7 +107,7 @@ function! paperplane#_update() abort
 		for lnum in reverse(iter)
 			let plnum += 1
 			" Replace leading tabs with spaces.
-			let [line, white, text; _] = matchlist(getline(lnum), '\v(^\s*)(.*)$')
+			let [line, white, text; _] = matchlist(getline(lnum), '\v^(\s*)(.*)$')
 			let pline = repeat(' ', strdisplaywidth(white)).text
 
 			let from = 1 + sw
@@ -136,11 +138,11 @@ function! paperplane#_update() abort
 					let count = 1
 				endif
 				if indent
-					if line[col] ==# "\t"
-						let tw = &ts - ((col + vcoldiff) % &ts) - 1
+					if line[col - 1] ==# "\t"
+						let tw = &ts - ((col - 1 + vcoldiff) % &ts) - 1
 						let count += tw
 						let vcoldiff += tw
-					elseif line[col] !~# '\s'
+					elseif line[col - 1] !~# '\s'
 						let ident = 0
 					endif
 				endif
