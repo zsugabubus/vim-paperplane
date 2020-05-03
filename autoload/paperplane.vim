@@ -88,9 +88,17 @@ function! paperplane#_update() abort
 		let pwinid = winnr()
 		wincmd p
 
-		let nw = max([&numberwidth - 1, float2nr(ceil(log10(line('$'))))])
-		let sw = wincol() - virtcol('.') - (nw + 1)
-		call setbufvar(bufnr, '&statusline', printf('%%#SignColumn#%*s%%#Folded#%*d %%#Normal#', sw, '', nw, w0 - (iter[0] + 1)))
+		if &number || &relativenumber
+			let nw = max([&numberwidth - 1, float2nr(ceil(log10(line('$'))))])
+		else
+			let nw = 0
+		endif
+		let sw = wincol() - virtcol('.') - (nw ># 0 ? nw + 1 : 0)
+		if nw ># 0
+			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%*d %%#Normal#', sw, '', nw, w0 - (iter[0] + 1)))
+		else
+			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%%#Normal#', sw, ''))
+		endif
 		let plnum = 0
 		let lnum = from
 
@@ -101,13 +109,13 @@ function! paperplane#_update() abort
 			let pline = repeat(' ', strdisplaywidth(white)).text
 
 			let from = 1 + sw
-			if &number || &relativenumber
+			if nw ># 0
 				call setbufline(bufnr, plnum, printf('%*s%*d %s', sw, '', nw, (&relativenumber ? abs(curlnum - lnum) : lnum), pline))
 				call matchaddpos('LineNr', [[plnum, from, nw + 1]], 10, -1, {'window': pwinid})
-				let from += nw
+				let from += nw + 1
 			else
-				call setbufline(bufnr, plnum, pline)
-			end
+				call setbufline(bufnr, plnum, printf('%*s%s', sw, '', pline))
+			endif
 
 			let end = min([len(line), winwidth(pwinid)])
 
@@ -115,7 +123,7 @@ function! paperplane#_update() abort
 			let prevhl = 'Normal'
 			let indent = 1
 			let vcoldiff = 0
-			for col in range(0, end + 1)
+			for col in range(1, end + 1)
 				let hlgroup = synIDattr(synIDtrans(synID(lnum, col, 1)), 'name')
 				if hlgroup ==# prevhl && col <# end
 					let count += 1
