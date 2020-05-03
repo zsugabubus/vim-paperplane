@@ -115,12 +115,14 @@ function! paperplane#_update() abort
 			let prevhl = 'Normal'
 			let indent = 1
 			let vcoldiff = 0
-			for col in range(0, end)
+			for col in range(0, end + 1)
 				let hlgroup = synIDattr(synIDtrans(synID(lnum, col, 1)), 'name')
-				if hlgroup ==# prevhl && from + count <# end
+				if hlgroup ==# prevhl && col <# end
 					let count += 1
 				else
-					call matchaddpos(prevhl, [[plnum, from, count]], 0, -1, {'window': pwinid})
+					if !empty(prevhl)
+						call matchaddpos(prevhl, [[plnum, from, count]], 0, -1, {'window': pwinid})
+					endif
 					let prevhl = hlgroup
 					let from += count
 					let count = 1
