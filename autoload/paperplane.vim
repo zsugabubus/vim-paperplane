@@ -159,7 +159,7 @@ function! paperplane#_update(...) abort
 		endif
 		let sw = wincol() - virtcol('.') - (nw ># 0 ? nw + 1 : 0)
 		if nw ># 0
-			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%*d %%#Normal#', sw, '', nw, w0 - currbottom))
+			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%*d %%#Normal#', sw, '', nw, w0 - currbottom - 1))
 		else
 			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%%#Normal#', sw, ''))
 		endif
