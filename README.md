@@ -12,13 +12,15 @@ Show parent indentations.
 
 ## Features
 
-- Shows parent indentations.
+- Neat.
+- Dumb.
+- Speedy.
 - Uses preview window.
-- Dumb (but still eats your CPU… search is expensive).
 
 ## Why?
 
 [context.vim](https://github.com/wellle/context.vim) was on my “will try it if
 need” list. However, when that day came… that was a sad day. Whole screen
 flickered (why?) and it felt pretty slow. So I grabbed my keyboard and
-reinvented it in 10th of the code to contain just the features I need.
+reinvented it to contain just the features I need. It’s CPU friendly, speedy
+and most importantly Works on My Machine™.

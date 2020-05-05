@@ -27,8 +27,9 @@ function! s:active()
 	call paperplane#_update()
 	augroup vim_paperplane
 		autocmd!
-		autocmd CursorMoved,CursorHold,VimResume,VimResized * noautocmd call paperplane#_update()
-		autocmd OptionSet number,relativenumber,numberwidth,signcolumn noautocmd call paperplane#_update()
+		autocmd CursorMoved,CursorHold * noautocmd call paperplane#_update()
+		autocmd VimResized * noautocmd call paperplane#_update(1)
+		autocmd OptionSet number,relativenumber,numberwidth,signcolumn,tabstop noautocmd call paperplane#_update(1)
 		autocmd BufUnload vim-paperplane:// call s:idle()
 	augroup END
 endfunction

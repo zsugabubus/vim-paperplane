@@ -28,12 +28,12 @@ paperplane_timeout				*g:paperplane_timeout*
 		Timeout for |search()|. Default is 10.
 
 ==============================================================================
-COMMANDS					*paperplane-commands*
+COMMANDS						*paperplane-commands*
 
-paperplane#isactive()				*paperplane#isactive()*
+paperplane#isactive()					*paperplane#isactive()*
 		Return 1 if paperplane is active, otherwise 0.
 
-paperplane#update()				*paperplane#update()*
+paperplane#update()					*paperplane#update()*
 		Update lines if |paperplane#isactive()|.
 
 		Note: Normally you may never call it directly because it is

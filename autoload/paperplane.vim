@@ -1,32 +1,70 @@
 " LICENSE: GPLv3 or later
 " AUTHOR: zsugabubus
+let s:bufnr = 0 " Buffer number that preview is displayed for.
+let s:changenr = 0 " changenr() of this buffer.
+let s:tree = {} " lnum -> { parent lnum | 0 }
+let s:bottom = 0 " First shown line in the preview (the bottom one).
+let s:nw = 0 " Width of number column (not includes the space).
+let s:sw = 0 " Width of sign column.
+let s:ts = 0 " Size of a tab.
+let s:ww = 0 " Width of preview window.
+
+" Is paperline buffer shown?
 function! paperplane#isactive() abort
 	return bufnr('vim-paperplane://') !=# -1
 endfunction
 
-function! paperplane#update() abort
+" Update buffer if shown.
+function! paperplane#update(...) abort
 	if paperplane#isactive()
-		noautocmd call paperplane#_update()
+		noautocmd call call('paperplane#_update', a:000)
 	endif
 endfunction
 
-function! paperplane#_update() abort
-	let view = winsaveview()
-	let curlnum = line('.')
-	let from = line('.') - 1
-	let iter = []
+" Force update. This one will create buffer if does not exist.
+function! paperplane#_update(...) abort
+	if a:0 ># 0
+		let [s:nw, s:sw, s:ts, s:ww] = [0, 0, 0, 0]
+	endif
 
-	" let wl = winline()
+	let lnum = line('.')
 	let w0 = line('w0')
-	let timeout = get(b:, 'paperplane_timeout', 10)
-	" let type = get(g:, 'paperplane_type', 'preview')
+
+	let changenr = changenr()
+	let bufnr = bufnr()
+
+	if s:bufnr ==# bufnr && s:changenr ==# changenr && s:ts ==# &ts
+		let fromlnum = lnum
+		if has_key(s:tree, fromlnum)
+			while fromlnum >=# w0
+				let fromlnum = s:tree[fromlnum]
+			endwhile
+			if fromlnum ==# s:bottom
+				return
+			endif
+		endif
+	else
+		let s:tree = {}
+		let s:bottom = 0
+	endif
+
+	let s:changenr = changenr
+	let s:bufnr = bufnr
+
+	let s:ts = &ts
+
+	let view = winsaveview()
+	let timeout = get(g:, 'paperplane_timeout', 10)
 
 	call cursor(0, 1)
-	if searchpos('\v\C^\s*\zs\w(.*[^:])?$', 'Wc', 0, timeout)[0] !=# 0
+	let fromlnum = lnum
+	if !has_key(s:tree, lnum) && searchpos('\v\C^\s*\zs\w(.*[^:])?$', 'Wc')[0] !=# 0
 		let indent = virtcol('.')
 		let maylabel = 1
 
-		while 1
+		let s:tree[fromlnum] = 0
+
+		while indent ># 1
 			let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs\w'.(maylabel ? '' : '.*[^:]\s*$'), 'Wb', 0, timeout)
 			if tolnum ==# 0
 				break
@@ -37,13 +75,18 @@ function! paperplane#_update() abort
 				continue
 			endif
 
-			if tolnum <# w0 - 1
-				call add(iter, tolnum)
+			" Set parent indent for original line because search() may jumped off
+			" that at the beginning.
+			if get(s:tree, lnum, 0) ==# 0
+				let s:tree[lnum] = tolnum
 			endif
-			" if tolnum + 1 <# from
-			" 	call add(iter, [from, tolnum + 1])
-			" endif
-			let from = tolnum - 1
+			" Build the tree.
+			let s:tree[fromlnum] = tolnum
+			let fromlnum = tolnum
+			" We already know the next indent.  We can exit now.
+			if has_key(s:tree, fromlnum)
+				break
+			endif
 
 			if maylabel && match(getline('.'), '\m\C:\s*$') !=# -1
 				let maylabel = 0
@@ -53,8 +96,17 @@ function! paperplane#_update() abort
 			endif
 		endwhile
 	endif
+	if !has_key(s:tree, fromlnum)
+		let s:tree[fromlnum] = 0
+	endif
 
-	if empty(iter)
+	" Go up on the tree until we reach an off-screen line.
+	let fromlnum = lnum
+	while fromlnum >=# w0
+		let fromlnum = s:tree[fromlnum]
+	endwhile
+	let currbottom = fromlnum
+	if fromlnum ==# 0
 		silent! pclose
 	else
 		let oldmode = mode()
@@ -82,117 +134,110 @@ function! paperplane#_update() abort
 		else
 			let bufnr = bufnr()
 		endif
-		execute 'resize' len(iter)
 
-		call clearmatches()
+		" Size increased. Reset highlights now.
+		if s:bottom <# currbottom
+			let s:bottom = 0 " Needed for below to indicate that all rows must be reset.
+			call clearmatches()
+		endif
+
+		" Find height of the tree. Go until we reach the root.
+		let plnum = 0
+		while fromlnum ># 0
+			let fromlnum = s:tree[fromlnum]
+			let plnum += 1
+		endwhile
+		execute 'resize' plnum
+
 		let pwinid = winnr()
 		wincmd p
 
-		" Width of numbers (not including space).
 		if &number || &relativenumber
 			let nw = max([&numberwidth - 1, float2nr(ceil(log10(line('$'))))])
 		else
 			let nw = 0
 		endif
-		" Width of sign column.
 		let sw = wincol() - virtcol('.') - (nw ># 0 ? nw + 1 : 0)
 		if nw ># 0
-			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%*d %%#Normal#', sw, '', nw, w0 - (iter[0] + 1)))
+			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%*d %%#Normal#', sw, '', nw, w0 - currbottom))
 		else
 			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%%#Normal#', sw, ''))
 		endif
-		let plnum = 0
-		let lnum = from
+		let ww = winwidth(pwinid)
 
-		for lnum in reverse(iter)
-			let plnum += 1
+		" If any option changed, every line must be reset.
+		if nw !=# s:nw || sw !=# s:sw || ww !=# s:ww
+			let s:bottom = 0 " Reset
+			wincmd P
+			call clearmatches()
+			wincmd p
+		endif
+
+		let fromlnum = currbottom
+		while fromlnum ># 0
 			" Replace leading tabs with spaces.
-			let [line, white, text; _] = matchlist(getline(lnum), '\v^(\s*)(.*)$')
+			let [line, white, text; _] = matchlist(getline(fromlnum), '\v^(\s*)(.*)$')
 			let pline = repeat(' ', strdisplaywidth(white)).text
 
 			let from = 1 + sw
 			if nw ># 0
-				call setbufline(bufnr, plnum, printf('%*s%*d %s', sw, '', nw, (&relativenumber ? abs(curlnum - lnum) : lnum), pline))
+				call setbufline(bufnr, plnum, printf('%*s%*d %s', sw, '', nw, (&relativenumber ? abs(lnum - fromlnum) : fromlnum), pline))
 				call matchaddpos('LineNr', [[plnum, from, nw + 1]], 10, -1, {'window': pwinid})
 				let from += nw + 1
 			else
 				call setbufline(bufnr, plnum, printf('%*s%s', sw, '', pline))
 			endif
 
-			let end = min([len(line), winwidth(pwinid)])
+			if fromlnum <=# s:bottom
+				" Compare with previous nw and sw. If any changed lines have moved
+				" horizontally.
+				if nw ==# 0 || !&relativenumber
+					" Do not even have to update line numbers
+					break
+				endif
+			else
+				let end = min([len(line), ww])
 
-			let count = 0
-			let prevhl = 'Normal'
-			let indent = 1
-			let vcoldiff = 0
-			for col in range(1, end + 1)
-				let hlgroup = synIDattr(synIDtrans(synID(lnum, col, 1)), 'name')
-				if hlgroup ==# prevhl && col <# end
-					let count += 1
-				else
-					if !empty(prevhl)
-						call matchaddpos(prevhl, [[plnum, from, count]], 0, -1, {'window': pwinid})
+				let count = 0
+				let prevhl = 'Normal'
+				let leading_white = 1
+				let vcoldiff = 0
+				for col in range(1, end + 1)
+					let hlgroup = synIDattr(synIDtrans(synID(fromlnum, col, 1)), 'name')
+					if hlgroup ==# prevhl && col <# end
+						let count += 1
+					else
+						if !empty(prevhl)
+							call matchaddpos(prevhl, [[plnum, from, count]], 0, -1, {'window': pwinid})
+						endif
+						let prevhl = hlgroup
+						let from += count
+						let count = 1
 					endif
-					let prevhl = hlgroup
-					let from += count
-					let count = 1
-				endif
-				if indent
-					if line[col - 1] ==# "\t"
-						let tw = &ts - ((col - 1 + vcoldiff) % &ts) - 1
-						let count += tw
-						let vcoldiff += tw
-					elseif line[col - 1] !~# '\s'
-						let ident = 0
+					if leading_white
+						if line[col - 1] ==# "\t"
+							let tw = &tabstop - ((col - 1 + vcoldiff) % &tabstop) - 1
+							let count += tw
+							let vcoldiff += tw
+						elseif line[col - 1] !~# '\s'
+							let leading_white = 0
+						endif
 					endif
-				endif
-			endfor
-		endfor
+				endfor
+			endif
+
+			let fromlnum = s:tree[fromlnum]
+			let plnum -= 1
+		endwhile
+
+		let s:nw = nw
+		let s:sw = sw
+		let s:ww = ww
 
 		if oldmode ==? 'v' || oldmode ==# "\<C-V>"
 			normal! gv
 		endif
 	endif
-
-	" if !empty(iter)
-	" 	setlocal foldmethod=manual
-	" 	let oldmode = mode()
-  "
-	" 	silent! normal! 1GVGzD
-  "
-	" 	let view.topline = from + 1
-	" 	let diffs = [copy(iter)]
-	" 	while 1
-	" 		call winrestview(view)
-	" 		if empty(iter)
-	" 			break
-	" 		endif
-  "
-	" 		execute 'normal!' iter[-1][1].'Gzf'.iter[-1][0].'G'
-	" 		call winrestview(view)
-  "
-	" 		if view.topline >=# line('w0')
-  "
-	" 			let wl2 = winline()
-  "
-	" 			let diff = wl2 - wl + (line('w0') - view.topline)
-	" 			call add(diffs, string({'len': iter[-1][0] - iter[-1][1],'wldiff': diff.'/'.(iter[-1][0] - iter[-1][1]), 'iter': iter[-1], 'lnum': line('.')}))
-  "
-	" 			execute 'normal!' iter[-1][1].'Gzd'.(iter[-1][0] + diff >=# iter[-1][1] ? iter[-1][1].'Gzf'.(iter[-1][0] + diff).'G' : '')
-  "
-	" 			break
-	" 		else
-	" 			call add(diffs, 'nw0: '.line('w0').'^'.view.topline)
-	" 		endif
-  "
-	" 		unlet iter[-1]
-	" 	endwhile
-  "
-	" 	\" echom string(diffs)
-	" 	if oldmode ==? 'v' || oldmode ==# \"\<C-V>\"
-	" 		normal! gv
-	" 	endif
-	" endif
-
+	let s:bottom = currbottom
 	call winrestview(view)
 endfunction
