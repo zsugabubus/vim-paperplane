@@ -3,12 +3,12 @@
 					Type |gO| to see the table of contents.
 
 ==============================================================================
-INTRO							*paperplane-intro*
+INTRO						*paperplane-intro*
 
 Paperplane is a simple plugin to show off-screen, parent indentations.
 
 ==============================================================================
-USAGE							*paperplane-usage*
+USAGE						*paperplane-usage*
 
 You can open paperplain by |CTRL-W_Z|. If something has been mapped to it
 paperplain will not overwrite it, so you have to open its buffer manually: >
@@ -28,12 +28,12 @@ paperplane_timeout				*g:paperplane_timeout*
 		Timeout for |search()|. Default is 10.
 
 ==============================================================================
-COMMANDS						*paperplane-commands*
+COMMANDS					*paperplane-commands*
 
-paperplane#isactive()					*paperplane#isactive()*
+paperplane#isactive()				*paperplane#isactive()*
 		Return 1 if paperplane is active, otherwise 0.
 
-paperplane#update()					*paperplane#update()*
+paperplane#update()				*paperplane#update()*
 		Update lines if |paperplane#isactive()|.
 
 		Note: Normally you may never call it directly because it is
@@ -41,7 +41,7 @@ paperplane#update()					*paperplane#update()*
 		Also see |g:paperplain_doscrollmappings|.
 
 ==============================================================================
-LICENSE							*paperplane-license*
+LICENSE						*paperplane-license*
 
 Released under the GNU General Public License version v3.0 or later.
 
