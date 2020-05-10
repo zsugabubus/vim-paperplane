@@ -58,11 +58,12 @@ function! paperplane#_update(...) abort
 
 	call cursor(0, 1)
 	let fromlnum = lnum
-	if !has_key(s:tree, lnum) && searchpos('\v\C^\s*\zs\w(.*[^:])?$', 'Wc')[0] !=# 0
+	if !has_key(s:tree, fromlnum) && searchpos('\v\C^\s*\zs\w(.*[^:])?$', 'Wc')[0] !=# 0
+		" Current line may changed because of the search.
+		let fromlnum = line('.')
 		let indent = virtcol('.')
+		let first_tolnum = 0
 		let maylabel = 1
-
-		let s:tree[fromlnum] = 0
 
 		while indent ># 1
 			let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs\w'.(maylabel ? '' : '.*[^:]\s*$'), 'Wb', 0, timeout)
@@ -77,8 +78,8 @@ function! paperplane#_update(...) abort
 
 			" Set parent indent for original line because search() may jumped off
 			" that at the beginning.
-			if get(s:tree, lnum, 0) ==# 0
-				let s:tree[lnum] = tolnum
+			if first_tolnum ==# 0
+				let first_tolnum = tolnum
 			endif
 			" Build the tree.
 			let s:tree[fromlnum] = tolnum
@@ -95,7 +96,14 @@ function! paperplane#_update(...) abort
 				let maylabel = 1
 			endif
 		endwhile
+		" Only set if untouched, otherwise it may cause a two-long loop: First
+		" search from start line -> inner search back to start line (that already
+		" points to this line).
+		if !has_key(s:tree, lnum)
+			let s:tree[lnum] = first_tolnum
+		endif
 	endif
+	" Terminate the branch of the tree.
 	if !has_key(s:tree, fromlnum)
 		let s:tree[fromlnum] = 0
 	endif
