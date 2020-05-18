@@ -167,9 +167,12 @@ function! paperplane#_update(...) abort
 		endif
 
 		let oldve = &ve
+		let oldcole = &cole
 		set ve=all
+		set cole=0
 		let sw = wincol() - virtcol('.') - (nw ># 0 ? nw + 1 : 0)
 		let &ve = oldve
+		let &cole = oldcole
 
 		if nw ># 0
 			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%*d %%#Normal#', sw, '', nw, w0 - currbottom - 1))
