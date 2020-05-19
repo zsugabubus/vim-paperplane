@@ -66,7 +66,7 @@ function! paperplane#_update(...) abort
 		let maylabel = 1
 
 		while indent ># 1
-			let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs\w'.(maylabel ? '' : '.*[^:]\s*$'), 'Wb', 0, timeout)
+			let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs\w'.(maylabel ? '' : '%(\k+\s*:\s*$)@!'), 'Wb', 0, timeout)
 			if tolnum ==# 0
 				break
 			endif
@@ -89,7 +89,7 @@ function! paperplane#_update(...) abort
 				break
 			endif
 
-			if maylabel && match(getline('.'), '\m\C:\s*$') !=# -1
+			if maylabel && match(getline('.'), '\v\C^\s*\k+\s*:\s*$') !=# -1
 				let maylabel = 0
 			else
 				let indent = virtcol('.')
