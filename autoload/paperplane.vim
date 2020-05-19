@@ -9,6 +9,9 @@ let s:sw = 0 " Width of sign column.
 let s:ts = 0 " Size of a tab.
 let s:ww = 0 " Width of preview window.
 
+let s:colnumfmt = '%%#Folded#%*s%*d %%#Normal#'
+let s:colfmt = '%%#Folded#%*s%%#Normal#'
+
 " Is paperline buffer shown?
 function! paperplane#isactive() abort
 	return bufnr('vim-paperplane://') !=# -1
@@ -23,6 +26,7 @@ endfunction
 
 " Force update. This one will create buffer if does not exist.
 function! paperplane#_update(...) abort
+	" On option update reset everything.
 	if a:0 ># 0
 		let [s:nw, s:sw, s:ts, s:ww] = [0, 0, 0, 0]
 	endif
@@ -40,6 +44,29 @@ function! paperplane#_update(...) abort
 				let fromlnum = s:tree[fromlnum]
 			endwhile
 			if fromlnum ==# s:bottom
+				" Redraw just line numbers.
+				if s:nw ># 0
+					let bufnr = bufnr('vim-paperplane://')
+					call setbufvar(bufnr, '&statusline', printf(s:colnumfmt, s:sw, '', s:nw, w0 - s:bottom - 1))
+					" Update relative line numbers.
+					if &relativenumber
+						let plnum = 0
+						while fromlnum ># 0
+							let fromlnum = s:tree[fromlnum]
+							let plnum += 1
+						endwhile
+
+						let fromlnum = s:bottom
+						while fromlnum ># 0
+							let newline = printf('%*s%*d%s', s:sw, '', s:nw, abs(lnum - fromlnum), getbufline(bufnr, plnum)[0][s:sw + s:nw:])
+							call setbufline(bufnr, plnum, newline)
+
+							let fromlnum = s:tree[fromlnum]
+							let plnum -= 1
+						endwhile
+					endif
+				endif
+
 				return
 			endif
 		endif
@@ -153,9 +180,14 @@ function! paperplane#_update(...) abort
 
 		" Find height of the tree. Go until we reach the root.
 		let plnum = 0
+		let nlines = line('$')
 		while fromlnum ># 0
 			let fromlnum = s:tree[fromlnum]
 			let plnum += 1
+			" `setline()` will not work on non-existent lines.
+			if plnum >=# nlines
+				call append(plnum, '')
+			endif
 		endwhile
 		execute 'resize' plnum
 
@@ -177,9 +209,9 @@ function! paperplane#_update(...) abort
 		let &cole = oldcole
 
 		if nw ># 0
-			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%*d %%#Normal#', sw, '', nw, w0 - currbottom - 1))
+			call setbufvar(bufnr, '&statusline', printf(s:colnumfmt, sw, '', nw, w0 - currbottom - 1))
 		else
-			call setbufvar(bufnr, '&statusline', printf('%%#Folded#%*s%%#Normal#', sw, ''))
+			call setbufvar(bufnr, '&statusline', printf(s:colfmt, sw, ''))
 		endif
 		let ww = winwidth(pwinid)
 
@@ -193,6 +225,15 @@ function! paperplane#_update(...) abort
 
 		let fromlnum = currbottom
 		while fromlnum ># 0
+			if fromlnum <=# s:bottom
+				" Compare with previous nw and sw. If any changed lines have moved
+				" horizontally.
+				if nw ==# 0 || !&relativenumber
+					" Do not even have to update line numbers
+					break
+				endif
+			endif
+
 			" Replace leading tabs with spaces.
 			let [line, white, text; _] = matchlist(getline(fromlnum), '\v^(\s*)(.*)$')
 			let pline = repeat(' ', strdisplaywidth(white)).text
@@ -206,43 +247,34 @@ function! paperplane#_update(...) abort
 				call setbufline(bufnr, plnum, printf('%*s%s', sw, '', pline))
 			endif
 
-			if fromlnum <=# s:bottom
-				" Compare with previous nw and sw. If any changed lines have moved
-				" horizontally.
-				if nw ==# 0 || !&relativenumber
-					" Do not even have to update line numbers
-					break
-				endif
-			else
-				let end = min([len(line), ww])
+			let end = min([len(line), ww])
 
-				let count = 0
-				let prevhl = 'Normal'
-				let leading_white = 1
-				let vcoldiff = 0
-				for col in range(1, end + 1)
-					let hlgroup = synIDattr(synIDtrans(synID(fromlnum, col, 1)), 'name')
-					if hlgroup ==# prevhl && col <# end
-						let count += 1
-					else
-						if !empty(prevhl)
-							call matchaddpos(prevhl, [[plnum, from, count]], 0, -1, {'window': pwinid})
-						endif
-						let prevhl = hlgroup
-						let from += count
-						let count = 1
+			let count = 0
+			let prevhl = 'Normal'
+			let leading_white = 1
+			let vcoldiff = 0
+			for col in range(1, end + 1)
+				let hlgroup = synIDattr(synIDtrans(synID(fromlnum, col, 1)), 'name')
+				if hlgroup ==# prevhl && col <# end
+					let count += 1
+				else
+					if !empty(prevhl)
+						call matchaddpos(prevhl, [[plnum, from, count]], 0, -1, {'window': pwinid})
 					endif
-					if leading_white
-						if line[col - 1] ==# "\t"
-							let tw = &tabstop - ((col - 1 + vcoldiff) % &tabstop) - 1
-							let count += tw
-							let vcoldiff += tw
-						elseif line[col - 1] !~# '\s'
-							let leading_white = 0
-						endif
+					let prevhl = hlgroup
+					let from += count
+					let count = 1
+				endif
+				if leading_white
+					if line[col - 1] ==# "\t"
+						let tw = &tabstop - ((col - 1 + vcoldiff) % &tabstop) - 1
+						let count += tw
+						let vcoldiff += tw
+					elseif line[col - 1] !~# '\s'
+						let leading_white = 0
 					endif
-				endfor
-			endif
+				endif
+			endfor
 
 			let fromlnum = s:tree[fromlnum]
 			let plnum -= 1
