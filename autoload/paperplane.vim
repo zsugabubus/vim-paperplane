@@ -57,8 +57,9 @@ function! paperplane#_update(...) abort
 	let timeout = get(g:, 'paperplane_timeout', 10)
 
 	call cursor(0, 1)
+	let [anypat, nolabelpat] = get(b:, 'paperplane_patterns', g:paperplane_patterns)
 	let fromlnum = lnum
-	if !has_key(s:tree, fromlnum) && searchpos('\v\C^\s*\zs\w(.*[^:])?$', 'Wc')[0] !=# 0
+	if !has_key(s:tree, fromlnum) && searchpos('\v\C^\s*\zs'.nolabelpat, 'Wc')[0] !=# 0
 		" Current line may changed because of the search.
 		let fromlnum = line('.')
 		let indent = virtcol('.')
@@ -66,7 +67,7 @@ function! paperplane#_update(...) abort
 		let maylabel = 1
 
 		while indent ># 1
-			let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs\w'.(maylabel ? '' : '%(\k+\s*:\s*$)@!'), 'Wb', 0, timeout)
+			let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs'.(maylabel ? anypat : nolabelpat), 'Wb', 0, timeout)
 			if tolnum ==# 0
 				break
 			endif
@@ -89,7 +90,7 @@ function! paperplane#_update(...) abort
 				break
 			endif
 
-			if maylabel && match(getline('.'), '\v\C^\s*\k+\s*:\s*$') !=# -1
+			if maylabel && match(getline('.'), '\v\C^\s*'.nolabelpat) ==# -1
 				let maylabel = 0
 			else
 				let indent = virtcol('.')

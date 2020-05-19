@@ -15,6 +15,13 @@ if get(g:, 'paperplane_doscrollmappings', 0) !=# 0
 	endif
 endif
 
+" Keep it undocumented for a while.
+augroup vim_paperplane_patterns
+	autocmd!
+	let g:paperplane_patterns = ['\w', '\w%(\k*\s*:\s*$)@!']
+	autocmd FileType c,cpp let b:paperplane_patterns = get(b:, 'paperplane_patterns', ['\w', '\w.*[^:]\s*$'])
+augroup END
+
 function! s:idle()
 	augroup vim_paperplane
 		autocmd!
