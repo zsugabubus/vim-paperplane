@@ -100,7 +100,8 @@ function! paperplane#_update(...) abort
 		" search from start line -> inner search back to start line (that already
 		" points to this line).
 		if !has_key(s:tree, lnum)
-			let s:tree[lnum] = first_tolnum
+			" ...plus avoid infinite loops.
+			let s:tree[lnum] = lnum !=# first_tolnum ? first_tolnum : 0
 		endif
 	endif
 	" Terminate the branch of the tree.
