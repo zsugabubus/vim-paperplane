@@ -1,6 +1,7 @@
 " LICENSE: GPLv3 or later
 " AUTHOR: zsugabubus
 let s:bufnr = 0 " Buffer number that preview is displayed for.
+let s:winnr = 0 " Window number that preview is displayed for.
 let s:changenr = 0 " changenr() of this buffer.
 let s:tree = {} " lnum -> { parent lnum | 0 }
 let s:bottom = 0 " First shown line in the preview (the bottom one).
@@ -36,38 +37,45 @@ function! paperplane#_update(...) abort
 
 	let changenr = changenr()
 	let bufnr = bufnr()
+	let winnr = winnr()
 
+	if s:winnr !=# winnr && s:bottom ># 0
+		silent! pclose
+		let s:bottom = 0
+	endif
 	if s:bufnr ==# bufnr && s:changenr ==# changenr && s:ts ==# &ts
-		let fromlnum = lnum
-		if has_key(s:tree, fromlnum)
-			while fromlnum >=# w0
-				let fromlnum = s:tree[fromlnum]
-			endwhile
-			if fromlnum ==# s:bottom
-				" Redraw just line numbers.
-				if s:nw ># 0
-					let bufnr = bufnr('vim-paperplane://')
-					call setbufvar(bufnr, '&statusline', printf(s:colnumfmt, s:sw, '', s:nw, w0 - s:bottom - 1))
-					" Update relative line numbers.
-					if &relativenumber
-						let plnum = 0
-						while fromlnum ># 0
-							let fromlnum = s:tree[fromlnum]
-							let plnum += 1
-						endwhile
+		if s:winnr ==# winnr
+			let fromlnum = lnum
+			if has_key(s:tree, fromlnum)
+				while fromlnum >=# w0
+					let fromlnum = s:tree[fromlnum]
+				endwhile
+				if fromlnum ==# s:bottom
+					" Redraw just line numbers.
+					if s:nw ># 0
+						let bufnr = bufnr('vim-paperplane://')
+						call setbufvar(bufnr, '&statusline', printf(s:colnumfmt, s:sw, '', s:nw, w0 - s:bottom - 1))
+						" Update relative line numbers.
+						if &relativenumber
+							let plnum = 0
+							while fromlnum ># 0
+								let fromlnum = s:tree[fromlnum]
+								let plnum += 1
+							endwhile
 
-						let fromlnum = s:bottom
-						while fromlnum ># 0
-							let newline = printf('%*s%*d%s', s:sw, '', s:nw, abs(lnum - fromlnum), getbufline(bufnr, plnum)[0][s:sw + s:nw:])
-							call setbufline(bufnr, plnum, newline)
+							let fromlnum = s:bottom
+							while fromlnum ># 0
+								let newline = printf('%*s%*d%s', s:sw, '', s:nw, abs(lnum - fromlnum), getbufline(bufnr, plnum)[0][s:sw + s:nw:])
+								call setbufline(bufnr, plnum, newline)
 
-							let fromlnum = s:tree[fromlnum]
-							let plnum -= 1
-						endwhile
+								let fromlnum = s:tree[fromlnum]
+								let plnum -= 1
+							endwhile
+						endif
 					endif
-				endif
 
-				return
+					return
+				endif
 			endif
 		endif
 	else
@@ -77,6 +85,7 @@ function! paperplane#_update(...) abort
 
 	let s:changenr = changenr
 	let s:bufnr = bufnr
+	let s:winnr = winnr
 
 	let s:ts = &ts
 
