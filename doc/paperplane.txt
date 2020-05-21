@@ -15,7 +15,7 @@ paperplain will not overwrite it, so you have to open its buffer manually: >
 	above pedit vim-paperplane://
 <	Currently, only preview window is supported.
 
-To close preview window you can simply use (the builtin) |CTRL-W-z|.
+To close preview window you can simply use (the builtin) |CTRL-W_z|.
 
 ==============================================================================
 CONFIGURATION					*paperplane-configuration*
