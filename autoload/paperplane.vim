@@ -259,7 +259,7 @@ function! paperplane#_update(...) abort
 			let end = min([len(line), ww])
 
 			let count = 0
-			let prevhl = 'Normal'
+			let prevhl = ''
 			let leading_white = 1
 			let vcoldiff = 0
 			for col in range(1, end + 1)
