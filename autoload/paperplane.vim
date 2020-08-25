@@ -243,47 +243,64 @@ function! paperplane#_update(...) abort
 				endif
 			endif
 
-			" Replace leading tabs with spaces.
-			let [line, white, text; _] = matchlist(getline(fromlnum), '\v^(\s*)(.*)$')
-			let pline = repeat(' ', strdisplaywidth(white)).text
+			let line = getline(fromlnum)
 
-			let from = 1 + sw
+			if sw > 0
+				call matchaddpos('SignColumn', [[plnum, 1, sw]], 10, -1, {'window': pwinid})
+			endif
 			if nw ># 0
-				call setbufline(bufnr, plnum, printf('%*s%*d %s', sw, '', nw, (&relativenumber ? abs(lnum - fromlnum) : fromlnum), pline))
-				call matchaddpos('LineNr', [[plnum, from, nw + 1]], 10, -1, {'window': pwinid})
-				let from += nw + 1
+				call matchaddpos('LineNr', [[plnum, 1 + sw, nw + 1]], 10, -1, {'window': pwinid})
+				let pline = printf('%*s%*d ', sw, '', nw, (&relativenumber ? abs(lnum - fromlnum) : fromlnum))
 			else
-				call setbufline(bufnr, plnum, printf('%*s%s', sw, '', pline))
+				let pline = printf('%*s', sw, '')
 			endif
 
-			let end = min([len(line), ww])
+			let [_, tabx, taby, tabz; _] = matchlist((&list ? &listchars.',tab:' : 'tab:  '), '\v%(^|,)tab:([^,]?)([^,]?)([^,]?)')
+			let [_, space; _] = matchlist((&list ? &listchars : '').',space: ', '\v%(^|,)space:([^,])')
 
-			let count = 0
+			let from = strlen(pline)
 			let prevhl = ''
-			let leading_white = 1
-			let vcoldiff = 0
-			for col in range(1, end + 1)
-				let hlgroup = synIDattr(synIDtrans(synID(fromlnum, col, 1)), 'name')
-				if hlgroup ==# prevhl && col <# end
-					let count += 1
+			let col = 1
+			let vcol = 0
+			while line !=# '' && vcol <# ww
+				let chr = strcharpart(line, 0, 1)
+				let line = strcharpart(line, 1)
+				let width = strdisplaywidth(chr, vcol)
+				let vcol += width
+				let to = strlen(pline)
+				if chr ==# "\t"
+					if tabx ==# ''
+						let hlgroup = 'SpecialKey'
+						let pline .= '^I'
+					else
+						let hlgroup = 'NonText'
+						let pline .= tabx.repeat(taby, width - 1 - strlen(tabz)).(width >=# 2 ? tabz : '')
+					end
+				elseif chr ==# ' '
+					let hlgroup = 'NonText'
+					let pline .= space
 				else
-					if !empty(prevhl)
-						call matchaddpos(prevhl, [[plnum, from, count]], 0, -1, {'window': pwinid})
-					endif
+					let hlgroup = synIDattr(synIDtrans(synID(fromlnum, col, 1)), 'name')
+					let pline .= chr
+				endif
+				let col += strlen(chr)
+				if prevhl !=# hlgroup
+					call matchaddpos(prevhl, [[plnum, from + 1, to - from]], 0, -1, {'window': pwinid})
 					let prevhl = hlgroup
-					let from += count
-					let count = 1
+					let from = to
 				endif
-				if leading_white
-					if line[col - 1] ==# "\t"
-						let tw = &tabstop - ((col - 1 + vcoldiff) % &tabstop) - 1
-						let count += tw
-						let vcoldiff += tw
-					elseif line[col - 1] !~# '\s'
-						let leading_white = 0
-					endif
-				endif
-			endfor
+			endwhile
+			let to = strlen(pline)
+			call matchaddpos(prevhl, [[plnum, from + 1, to - from]], 0, -1, {'window': pwinid})
+			if line ==# ''
+				let from = to
+				let [_, eol; _] = matchlist((&list ? &listchars : '').',eol: ', '\v%(^|,)eol:([^,])')
+				let pline .= eol
+				let to = strlen(pline)
+				call matchaddpos('NonText', [[plnum, from + 1, to - from]], 0, -1, {'window': pwinid})
+			endif
+
+			call setbufline(bufnr, plnum, pline)
 
 			let fromlnum = s:tree[fromlnum]
 			let plnum -= 1
