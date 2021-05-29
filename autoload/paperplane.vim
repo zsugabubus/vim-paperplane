@@ -45,12 +45,12 @@ function! paperplane#_update(...) abort
 	endif
 	if s:bufnr ==# bufnr && s:changenr ==# changenr && s:ts ==# &ts
 		if s:winnr ==# winnr
-			let fromlnum = lnum
-			if has_key(s:tree, fromlnum)
-				while fromlnum >=# w0
-					let fromlnum = s:tree[fromlnum]
+			let from_lnum = lnum
+			if has_key(s:tree, from_lnum)
+				while from_lnum >=# w0
+					let from_lnum = s:tree[from_lnum]
 				endwhile
-				if fromlnum ==# s:bottom
+				if from_lnum ==# s:bottom
 					" Redraw just line numbers.
 					if s:nw ># 0
 						let bufnr = bufnr('vim-paperplane://')
@@ -58,17 +58,17 @@ function! paperplane#_update(...) abort
 						" Update relative line numbers.
 						if &relativenumber
 							let plnum = 0
-							while fromlnum ># 0
-								let fromlnum = s:tree[fromlnum]
+							while from_lnum ># 0
+								let from_lnum = s:tree[from_lnum]
 								let plnum += 1
 							endwhile
 
-							let fromlnum = s:bottom
-							while fromlnum ># 0
-								let newline = printf('%*s%*d%s', s:sw, '', s:nw, abs(lnum - fromlnum), getbufline(bufnr, plnum)[0][s:sw + s:nw:])
+							let from_lnum = s:bottom
+							while from_lnum ># 0
+								let newline = printf('%*s%*d%s', s:sw, '', s:nw, abs(lnum - from_lnum), getbufline(bufnr, plnum)[0][s:sw + s:nw:])
 								call setbufline(bufnr, plnum, newline)
 
-								let fromlnum = s:tree[fromlnum]
+								let from_lnum = s:tree[from_lnum]
 								let plnum -= 1
 							endwhile
 						endif
@@ -93,66 +93,121 @@ function! paperplane#_update(...) abort
 	let timeout = get(g:, 'paperplane_timeout', 10)
 
 	call cursor(0, 1)
-	let [anypat, nolabelpat] = get(b:, 'paperplane_patterns', g:paperplane_patterns)
-	let fromlnum = lnum
-	if !has_key(s:tree, fromlnum) && searchpos('\v\C^\s*\zs'.nolabelpat, 'Wc')[0] !=# 0
-		" Current line may changed because of the search.
-		let fromlnum = line('.')
-		let indent = virtcol('.')
-		let first_tolnum = 0
-		let maylabel = 1
+	let from_lnum = lnum
 
-		while indent ># 1
-			let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs'.(maylabel ? anypat : nolabelpat), 'Wb', 0, timeout)
-			if tolnum ==# 0
-				break
-			endif
-
-			let iscomment = synIDattr(synIDtrans(synID(tolnum, tocol, 1)), 'name') =~? '\mcomment|string'
-			if iscomment
-				continue
-			endif
-
-			" Set parent indent for original line because search() may jumped off
-			" that at the beginning.
-			if first_tolnum ==# 0
-				let first_tolnum = tolnum
-			endif
-			" Build the tree.
-			let s:tree[fromlnum] = tolnum
-			let fromlnum = tolnum
-			" We already know the next indent.  We can exit now.
-			if has_key(s:tree, fromlnum)
-				break
-			endif
-
-			if maylabel && match(getline('.'), '\v\C^\s*'.nolabelpat) ==# -1
-				let maylabel = 0
-			else
+	if !has_key(s:tree, from_lnum)
+		let spec = get(b:, 'paperplane', g:paperplane)
+		if has_key(spec, 'indent')
+			let [anypat, nolabelpat] = spec.indent
+			if searchpos('\v\C^\s*\zs'.nolabelpat, 'Wc')[0] !=# 0
+				" Current line may changed because of the search.
+				let from_lnum = line('.')
 				let indent = virtcol('.')
+				let first_tolnum = 0
 				let maylabel = 1
+
+				while indent ># 1
+					let [tolnum, tocol] = searchpos('\v\C^\s*%<'.indent.'v\zs'.(maylabel ? anypat : nolabelpat), 'Wb', 0, timeout)
+					if tolnum ==# 0
+						break
+					endif
+
+					let iscomment = synIDattr(synIDtrans(synID(tolnum, tocol, 1)), 'name') =~? '\mcomment|string'
+					if iscomment
+						continue
+					endif
+
+					" Set parent indent for original line because search() may jumped off
+					" that at the beginning.
+					if first_tolnum ==# 0
+						let first_tolnum = tolnum
+					endif
+					" Build the tree.
+					let s:tree[from_lnum] = tolnum
+					let from_lnum = tolnum
+					" We already know the next indent.  We can exit now.
+					if has_key(s:tree, from_lnum)
+						break
+					endif
+
+					if maylabel && match(getline('.'), '\v\C^\s*'.nolabelpat) ==# -1
+						let maylabel = 0
+					else
+						let indent = virtcol('.')
+						let maylabel = 1
+					endif
+				endwhile
+				" Only set if untouched, otherwise it may cause a two-long loop: First
+				" search from start line -> inner search back to start line (that already
+				" points to this line).
+				if !has_key(s:tree, lnum)
+					" ...plus avoid infinite loops.
+					let s:tree[lnum] = lnum !=# first_tolnum ? first_tolnum : 0
+				endif
 			endif
-		endwhile
-		" Only set if untouched, otherwise it may cause a two-long loop: First
-		" search from start line -> inner search back to start line (that already
-		" points to this line).
-		if !has_key(s:tree, lnum)
-			" ...plus avoid infinite loops.
-			let s:tree[lnum] = lnum !=# first_tolnum ? first_tolnum : 0
+
+			" Terminate the branch of the tree.
+			if !has_key(s:tree, from_lnum)
+				let s:tree[from_lnum] = 0
+			endif
+		elseif has_key(spec, 'flat')
+			let spec = spec.flat
+			let max_level = len(spec) - 1
+			let lnums = map(range(len(spec)), from_lnum)
+			let curlevel = -1
+			while 1
+				let tolnum = max(lnums)
+				let level = index(lnums, tolnum)
+
+				" Check after over range, because maybe only its first half has been
+				" seen so far.
+				let seen = has_key(s:tree, tolnum)
+				let parent = max(lnums[curlevel + 1:])
+
+				for i in range(tolnum + 1, from_lnum - (level <# curlevel))
+					" echom i.'<-'.two.' '.from_lnum.' l'.level.'/'.len(lnums).' ['.lnums[0].','.lnums[1]
+					let s:tree[i] = parent
+				endfor
+
+				if !tolnum || seen
+					if !seen
+						let s:tree[from_lnum] = tolnum
+					endif
+					" echom 'kecske'.(tolnum + 1).'-'.lnum.'-'.from_lnum.' -'(level <# curlevel).'='.get(s:tree, lnum, -1)
+					break
+				endif
+
+				" Branch ended and outside of screen.
+				if level ==# max_level
+					" echoe tolnum
+					let s:tree[tolnum] = 0
+					if tolnum <# w0
+						break
+					endif
+				endif
+
+				if tolnum <# from_lnum
+					let curlevel = level
+					let from_lnum = tolnum
+				endif
+
+				call cursor(from_lnum, 1)
+				let lnums[level] = searchpos('\v^'.spec[level], 'Wb', 0, timeout)[0]
+			endwhile
 		endif
 	endif
-	" Terminate the branch of the tree.
-	if !has_key(s:tree, fromlnum)
-		let s:tree[fromlnum] = 0
-	endif
+
+	" for k in keys(s:tree)
+	" 	call nvim_buf_set_virtual_text(0, -1, +k - 1, [[\"\".s:tree[k], 'Normal']], {})
+	" endfor
 
 	" Go up on the tree until we reach an off-screen line.
-	let fromlnum = lnum
-	while fromlnum >=# w0
-		let fromlnum = s:tree[fromlnum]
+	let from_lnum = lnum
+	while from_lnum >=# w0
+		let from_lnum = s:tree[from_lnum]
 	endwhile
-	let currbottom = fromlnum
-	if fromlnum ==# 0
+	let cur_bottom = from_lnum
+	if from_lnum ==# 0
 		silent! pclose
 	else
 		let oldmode = mode()
@@ -182,7 +237,7 @@ function! paperplane#_update(...) abort
 		endif
 
 		" Size increased. Reset highlights now.
-		if s:bottom <# currbottom
+		if s:bottom <# cur_bottom
 			let s:bottom = 0 " Needed for below to indicate that all rows must be reset.
 			call clearmatches()
 		endif
@@ -190,8 +245,8 @@ function! paperplane#_update(...) abort
 		" Find height of the tree. Go until we reach the root.
 		let plnum = 0
 		let nlines = line('$')
-		while fromlnum ># 0
-			let fromlnum = s:tree[fromlnum]
+		while from_lnum ># 0
+			let from_lnum = s:tree[from_lnum]
 			let plnum += 1
 			" `setline()` will not work on non-existent lines.
 			if plnum >=# nlines
@@ -218,7 +273,7 @@ function! paperplane#_update(...) abort
 		let &cole = oldcole
 
 		if nw ># 0
-			call setbufvar(bufnr, '&statusline', printf(s:colnumfmt, sw, '', nw, w0 - currbottom - 1))
+			call setbufvar(bufnr, '&statusline', printf(s:colnumfmt, sw, '', nw, w0 - cur_bottom - 1))
 		else
 			call setbufvar(bufnr, '&statusline', printf(s:colfmt, sw, ''))
 		endif
@@ -232,9 +287,9 @@ function! paperplane#_update(...) abort
 			wincmd p
 		endif
 
-		let fromlnum = currbottom
-		while fromlnum ># 0
-			if fromlnum <=# s:bottom
+		let from_lnum = cur_bottom
+		while from_lnum ># 0
+			if from_lnum <=# s:bottom
 				" Compare with previous nw and sw. If any changed lines have moved
 				" horizontally.
 				if nw ==# 0 || !&relativenumber
@@ -243,14 +298,14 @@ function! paperplane#_update(...) abort
 				endif
 			endif
 
-			let line = getline(fromlnum)
+			let line = getline(from_lnum)
 
 			if sw > 0
 				call matchaddpos('SignColumn', [[plnum, 1, sw]], 10, -1, {'window': pwinid})
 			endif
 			if nw ># 0
 				call matchaddpos('LineNr', [[plnum, 1 + sw, nw + 1]], 10, -1, {'window': pwinid})
-				let pline = printf('%*s%*d ', sw, '', nw, (&relativenumber ? abs(lnum - fromlnum) : fromlnum))
+				let pline = printf('%*s%*d ', sw, '', nw, (&relativenumber ? abs(lnum - from_lnum) : from_lnum))
 			else
 				let pline = printf('%*s', sw, '')
 			endif
@@ -280,7 +335,8 @@ function! paperplane#_update(...) abort
 					let hlgroup = 'NonText'
 					let pline .= space
 				else
-					let hlgroup = synIDattr(synIDtrans(synID(fromlnum, col, 1)), 'name')
+					let do_ask_me_why_should_synID_be_requested_twice_but_otherwise_diff_atat_does_not_get_highlighted_as_expected_also__column_number_does_not_matter = synID(from_lnum, 10, 0)
+					let hlgroup = synIDattr(synIDtrans(synID(from_lnum, col, 0)), 'name')
 					let pline .= chr
 				endif
 				let col += strlen(chr)
@@ -302,7 +358,7 @@ function! paperplane#_update(...) abort
 
 			call setbufline(bufnr, plnum, pline)
 
-			let fromlnum = s:tree[fromlnum]
+			let from_lnum = s:tree[from_lnum]
 			let plnum -= 1
 		endwhile
 
@@ -314,6 +370,6 @@ function! paperplane#_update(...) abort
 			normal! gv
 		endif
 	endif
-	let s:bottom = currbottom
+	let s:bottom = cur_bottom
 	call winrestview(view)
 endfunction

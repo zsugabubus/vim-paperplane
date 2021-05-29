@@ -18,8 +18,9 @@ endif
 " Keep it undocumented for a while.
 augroup vim_paperplane_patterns
 	autocmd!
-	let g:paperplane_patterns = ['\w', '\w%(\k*\s*:\s*$)@!']
-	autocmd FileType c,cpp let b:paperplane_patterns = get(b:, 'paperplane_patterns', ['\w', '\w.*[^:]\s*$'])
+	let g:paperplane = { 'indent': ['\w', '\w%(\k*\s*:\s*$)@!'] }
+	autocmd FileType c,cpp let b:paperplane = get(b:, 'paperplane', { 'indent': ['\w', '\w.*[^:]\s*$'] })
+	autocmd FileType git,diff let b:paperplane = get(b:, 'paperplane', { 'flat': ['\@\@', '^diff'] })
 augroup END
 
 function! s:idle()
